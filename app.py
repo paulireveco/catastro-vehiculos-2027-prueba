@@ -93,10 +93,14 @@ Se recomienda ajustar los filtros de servicio, estado, priorización o total de 
                 .head(5)
                 .reset_index()
             )
+
             top_servicios.columns = ["Servicio", "Cantidad"]
 
             texto_top_servicios = "\n".join(
-                [["Servicio", "Cantidad"_serviciosidad']} vehículos" for _, row in top_servicios.iterrows()]
+                [
+                    f"- {row['Servicio']}: {row['Cantidad']} vehículos"
+                    for _, row in top_servicios.iterrows()
+                ]
             )
         else:
             texto_top_servicios = "No se identifican vehículos con 3 o más criterios cumplidos para los filtros seleccionados."
