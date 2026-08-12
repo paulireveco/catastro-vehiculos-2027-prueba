@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 
 st.set_page_config(
     page_title="Catastro Vehiculos 2027",
@@ -29,6 +30,168 @@ def cargar_excel(archivo):
 
 @st.cache_data(show_spinner=False)
 def preparar_datos(df):
+def generar_minuta(df):
+    """
+    Genera una minuta ejecutiva en texto según los filtros aplicados en el dashboard.
+    Usa el dataframe filtrado actualmente en pantalla.
+    """
+
+    fecha_actual = datetime.now().strftime("%d-%m-%Y %H:%M")
+
+    total_registros = len(df)
+
+    if total_registros == 0:
+        return f"""
+MINUTA EJECUTIVA
+Catastro Nacional de Vehículos Institucionales 2027
+
+Fecha de generación: {fecha_actual}
+
+No existen registros para los filtros seleccionados.
+
+Se recomienda ajustar los filtros de servicio, estado, priorización o total de criterios cumplidos para generar un análisis con información disponible.
+"""
+
+    # Indicadores principales
+    total_3_mas = 0
+    promedio_criterios = 0
+    gasto_total = 0
+
+    if "Total criterios cumplidos" in df.columns:
+        total_3_mas = int((df["Total criterios cumplidos"] >= 3).sum())
+        promedio_criterios = df["Total criterios cumplidos"].mean()
+
+    if "Gasto mantención ajustado" in df.columns:
+        gasto_total = df["Gasto mantención ajustado"].fillna(0).sum()
+
+    # Servicios incluidos
+    if "Servicio" in df.columns:
+        servicios = sorted(df["Servicio"].dropna().astype(str).unique())
+        texto_servicios = ", ".join(servicios[:10])
+        if len(servicios) > 10:
+            texto_servicios += f", entre otros. Total servicios: {len(servicios)}"
+    else:
+        texto_servicios = "No disponible"
+
+    # Priorización
+    if "Priorización" in df.columns:
+        conteo_priorizacion = df["Priorización"].value_counts().to_dict()
+        texto_priorizacion = "\n".join([f"- {k}: {v}" for k, v in conteo_priorizacion.items()])
+    else:
+        texto_priorizacion = "- No disponible"
+
+    # Top servicios con más vehículos de alta criticidad
+    texto_top_servicios = "No disponible"
+
+    if "Servicio" in df.columns and "Total criterios cumplidos" in df.columns:
+        df_criticos = df[df["Total criterios cumplidos"] >= 3]
+
+        if not df_criticos.empty:
+            top_servicios = (
+                df_criticos["Servicio"]
+                .value_counts()
+                .head(5)
+                .reset_index()
+            )
+            top_servicios.columns = ["Servicio", "Cantidad"]
+
+            texto_top_servicios = "\n".join(
+                [["Servicio", "Cantidad"_serviciosidad']} vehículos" for _, row in top_servicios.iterrows()]
+            )
+        else:
+            texto_top_servicios = "No se identifican vehículos con 3 o más criterios cumplidos para los filtros seleccionados."
+
+    # Top vehículos críticos
+    texto_top_vehiculos = "No disponible"
+
+    columnas_top = [
+        "Servicio",
+        "I.R.N.V.M. ajustado",
+        "Tipo vehículo ajustado",
+        "Año Vehículo ajustado",
+        "Kilometraje ajustado",
+        "Gasto mantención ajustado",
+        "Total criterios cumplidos",
+    ]
+
+    columnas_existentes = [c for c in columnas_top if c in df.columns]
+
+    if "Total criterios cumplidos" in df.columns and columnas_existentes:
+        df_top = df.sort_values(
+            by="Total criterios cumplidos",
+            ascending=False
+        ).head(10)
+
+        lineas = []
+        for _, row in df_top.iterrows():
+            servicio = row.get("Servicio", "No indica")
+            patente = row.get("I.R.N.V.M. ajustado", "No indica")
+            criterios = row.get("Total criterios cumplidos", "No indica")
+            gasto = row.get("Gasto mantención ajustado", 0)
+            km = row.get("Kilometraje ajustado", 0)
+
+            try:
+                gasto_fmt = f"${float(gasto):,.0f}".replace(",", ".")
+            except Exception:
+                gasto_fmt = "No disponible"
+
+            try:
+                km_fmt = f"{float(km):,.0f}".replace(",", ".")
+            except Exception:
+                km_fmt = "No disponible"
+
+            lineas.append(
+                f"- {servicio} | Patente/I.R.N.V.M.: {patente} | Criterios: {criterios} | Kilometraje: {km_fmt} | Mantención: {gasto_fmt}"
+            )
+
+        texto_top_vehiculos = "\n".join(lineas)
+
+    gasto_total_fmt = f"${gasto_total:,.0f}".replace(",", ".")
+    promedio_fmt = f"{promedio_criterios:.2f}".replace(".", ",")
+
+    minuta = f"""
+MINUTA EJECUTIVA
+Catastro Nacional de Vehículos Institucionales 2027
+
+Fecha de generación: {fecha_actual}
+
+1. Antecedentes
+
+La presente minuta se genera automáticamente a partir del dashboard del Catastro Nacional de Vehículos Institucionales 2027, considerando los filtros aplicados por el usuario al momento de emitir el reporte.
+
+2. Universo analizado
+
+- Total de vehículos considerados en el filtro: {total_registros}
+- Servicios incluidos: {texto_servicios}
+- Vehículos con 3 o más criterios cumplidos: {total_3_mas}
+- Promedio de criterios cumplidos: {promedio_fmt}
+- Gasto total de mantención asociado al filtro: {gasto_total_fmt}
+
+3. Distribución por priorización
+
+{texto_priorizacion}
+
+4. Servicios con mayor concentración de vehículos críticos
+
+{texto_top_servicios}
+
+5. Principales vehículos identificados en el análisis
+
+{texto_top_vehiculos}
+
+6. Observación técnica
+
+Los vehículos con mayor cantidad de criterios cumplidos concentran condiciones relevantes para evaluación institucional, especialmente cuando presentan antigüedad elevada, alto kilometraje, mayores gastos de mantención o priorización alta informada por la unidad correspondiente.
+
+7. Recomendación
+
+Se recomienda revisar los vehículos que cumplen 3 o más criterios, a fin de evaluar su incorporación en procesos de planificación presupuestaria, renovación, reposición o análisis técnico de continuidad operativa.
+
+Esta minuta constituye un insumo preliminar para apoyar la toma de decisiones y debe ser complementada con antecedentes administrativos, presupuestarios y técnicos de cada servicio.
+"""
+
+    return minuta
+    
     """Asegura tipos numericos y campos necesarios para graficos."""
     if df.empty:
         return df
@@ -112,6 +275,19 @@ if "Total criterios cumplidos" in df_filtrado.columns:
 
 # Indicadores
 st.subheader("Indicadores principales")
+st.subheader("Generación de reporte")
+
+minuta_texto = generar_minuta(df_filtrado)
+
+st.download_button(
+    label="📄 Descargar minuta del análisis filtrado",
+    data=minuta_texto,
+    file_name="minuta_catastro_vehiculos_2027.txt",
+    mime="text/plain"
+)
+
+with st.expander("Vista previa de la minuta"):
+    st.text(minuta_texto)
 col1, col2, col3, col4 = st.columns(4)
 
 col1.metric("Vehiculos filtrados", f"{len(df_filtrado):,}".replace(",", "."))
@@ -194,3 +370,5 @@ with st.expander("Plan aplicado"):
         st.dataframe(df_plan, use_container_width=True)
     else:
         st.info("No se encontro la hoja 'Plan aplicado'.")
+
+Agrega generación de minuta automática
