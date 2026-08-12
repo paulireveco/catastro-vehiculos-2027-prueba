@@ -376,3 +376,4 @@ with st.expander("Plan aplicado"):
         st.info("No se encontro la hoja 'Plan aplicado'.")
 
 Agrega generación de minuta automática
+Corrige generación de minuta
